@@ -15,6 +15,7 @@ import androidx.media3.ui.PlayerView
 import java.io.File
 
 class PlayerActivity : AppCompatActivity() {
+
     private lateinit var player: ExoPlayer
     private lateinit var playerView: PlayerView
 
@@ -29,24 +30,27 @@ class PlayerActivity : AppCompatActivity() {
 
         val isAndroidTV = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
-        // Default resize mode per platform
-        playerView.resizeMode = if (isAndroidTV) {
-            AspectRatioFrameLayout.RESIZE_MODE_FIT
-        } else {
-            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-        }
+//        //resizeMode (Media3 correct way)
+//        playerView.post {
+//            playerView.setResizeMode(
+//                if (isAndroidTV)
+//                    AspectRatioFrameLayout.RESIZE_MODE_FIT
+//                else
+//                    AspectRatioFrameLayout.RESIZE_MODE_FILL
+//            )
+//        }
 
         val videoList = intent.getStringArrayListExtra("VIDEO_LIST")
             ?.filter { File(it).exists() }
             ?: return
+
         player = ExoPlayer.Builder(this).build().also { exo ->
             playerView.player = exo
             exo.repeatMode = Player.REPEAT_MODE_ALL
-            if (isAndroidTV) {
-                exo.setHandleAudioBecomingNoisy(true)
-            }
             exo.setMediaItems(
-                videoList.map { path -> MediaItem.fromUri(Uri.fromFile(File(path))) }
+                videoList.map { path ->
+                    MediaItem.fromUri(Uri.fromFile(File(path)))
+                }
             )
             exo.prepare()
             exo.playWhenReady = false
@@ -60,17 +64,23 @@ class PlayerActivity : AppCompatActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
-    override fun onPause() { super.onPause();
-        if (::player.isInitialized)
-            player.playWhenReady = false
+    override fun onPause() {
+        super.onPause()
+        if (::player.isInitialized) player.playWhenReady = false
     }
 
-    override fun onStop()  { super.onStop();
-        if (::player.isInitialized)
-            player.pause()
+    override fun onResume() {
+        super.onResume()
+        hideSystemUI()
     }
-    override fun onDestroy(){ super.onDestroy();
-        if (::player.isInitialized)
-            player.release()
+
+    override fun onStop() {
+        super.onStop()
+        if (::player.isInitialized) player.pause()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::player.isInitialized) player.release()
     }
 }

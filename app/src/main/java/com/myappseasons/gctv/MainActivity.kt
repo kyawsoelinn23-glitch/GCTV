@@ -23,6 +23,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.myappseasons.gctv.databinding.ActivityMainBinding
+import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import java.io.File
 
@@ -96,6 +97,8 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnPlay.isEnabled = false
         binding.btnImage.isEnabled = false
+        binding.btnDelete.isEnabled = false
+        binding.btnRefresh.isEnabled = false
         binding.btnPlay.text = "DOWNLOAD FIRST"
         binding.btnImage.text = "DOWNLOAD FIRST"
         binding.downloadStatusContainer.visibility = View.GONE
@@ -191,6 +194,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnPlay.text = if (videoExists) "PLAY VIDEO" else "DOWNLOAD FIRST"
         binding.btnImage.isEnabled = imageExists
         binding.btnImage.text = if (imageExists) "VIEW IMAGE" else "DOWNLOAD FIRST"
+        binding.btnDelete.isEnabled = files.isNotEmpty()
+        binding.btnRefresh.isEnabled = true
     }
 
     private fun startBatchDownload() {

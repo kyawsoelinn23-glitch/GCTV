@@ -14,6 +14,7 @@
         android:layout_height="match_parent"
         android:keepScreenOn="true"
         app:use_controller="true"
+        app:resize_mode="fit"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"

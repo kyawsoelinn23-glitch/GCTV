@@ -60,9 +60,9 @@ dependencies {
     implementation("com.github.bumptech.glide:glide:4.16.0")
 
     // Media3 (use one consistent version)
-    implementation("androidx.media3:media3-common:1.2.1")
     implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.media3:media3-ui:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
