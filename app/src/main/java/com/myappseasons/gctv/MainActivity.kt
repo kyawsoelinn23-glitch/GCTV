@@ -1,10 +1,13 @@
 package com.myappseasons.gctv
 
+import android.Manifest
+import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,9 +16,12 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.myappseasons.gctv.databinding.ActivityMainBinding
+import timber.log.Timber
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -36,9 +42,18 @@ class MainActivity : AppCompatActivity() {
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1
-            if (id == downloadId) runOnUiThread { checkForLatestFiles() }
+            val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
+            if (id == downloadId) {
+                Timber.d("Download complete: $downloadId")
+                runOnUiThread { checkForLatestFiles() }
+            }
         }
+    }
+
+    private val requestNotifPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Timber.d("POST_NOTIFICATIONS granted: $granted")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,12 +61,31 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        Timber.plant(Timber.DebugTree())
+
+        ensureNotificationPermissionOn33Plus()
         initUI()
         registerDownloadReceiver()
         checkForLatestFiles()
     }
 
+    private fun ensureNotificationPermissionOn33Plus() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            val permission = Manifest.permission.POST_NOTIFICATIONS
+            val granted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                requestNotifPermission.launch(permission)
+            }
+        }
+    }
+
     private fun initUI() {
+        // Better defaults for TV focus
+        binding.btnDownload.isFocusable = true
+        binding.btnPlay.isFocusable = true
+        binding.btnImage.isFocusable = true
+        binding.btnRefresh.isFocusable = true
+
         binding.btnPlay.isEnabled = false
         binding.btnImage.isEnabled = false
         binding.btnPlay.text = "DOWNLOAD FIRST"
@@ -62,45 +96,45 @@ class MainActivity : AppCompatActivity() {
         binding.tvStatus.text = "Idle"
 
         binding.btnDownload.setOnClickListener { startBatchDownload() }
-
-        // **NEW:** separate buttons for videos and images
         binding.btnPlay.setOnClickListener { openVideoFiles() }
         binding.btnImage.setOnClickListener { openImageFiles() }
-
         binding.btnRefresh.setOnClickListener { checkForLatestFiles() }
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun registerDownloadReceiver() {
         val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(downloadReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            else registerReceiver(downloadReceiver, filter)
-        } catch (_: Exception) {}
+            } else {
+                registerReceiver(downloadReceiver, filter)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "registerReceiver failed")
+        }
     }
 
     // Check for both video and image files
     private fun checkForLatestFiles() {
         val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
-        val files = dir.listFiles()?.filter { it.isFile } ?: return
+        val files = dir.listFiles()?.filter { it.isFile } ?: emptyList()
 
         val videoExists = files.any { it.isVideo() }
         val imageExists = files.any { it.isImage() }
 
-        runOnUiThread {
-            binding.btnPlay.isEnabled = videoExists
-            binding.btnPlay.text = if (videoExists) "PLAY VIDEO" else "DOWNLOAD FIRST"
-            binding.btnImage.isEnabled = imageExists
-            binding.btnImage.text = if (imageExists) "VIEW IMAGE" else "DOWNLOAD FIRST"
-        }
+        binding.btnPlay.isEnabled = videoExists
+        binding.btnPlay.text = if (videoExists) "PLAY VIDEO" else "DOWNLOAD FIRST"
+        binding.btnImage.isEnabled = imageExists
+        binding.btnImage.text = if (imageExists) "VIEW IMAGE" else "DOWNLOAD FIRST"
     }
 
     private fun startBatchDownload() {
         if (downloadUrls.isEmpty()) return
         currentDownloadIndex = 0
         binding.downloadStatusContainer.visibility = View.VISIBLE
-        updateProgressUI(0, 0, "Preparing...")
-        disablePlayButtons("DOWNLOADING...")
+        updateProgressUI(0, 0, "Preparing…")
+        disablePlayButtons("DOWNLOADING…")
         startSingleDownload(downloadUrls[currentDownloadIndex])
     }
 
@@ -131,22 +165,34 @@ class MainActivity : AppCompatActivity() {
                     val query = DownloadManager.Query().setFilterById(downloadId)
                     dm.query(query)?.use { cursor ->
                         if (cursor.moveToFirst()) {
-                            val status = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_STATUS))
-                            val total = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                            val downloaded = cursor.getLong(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                            val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                            val totalIndex = cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                            val downloadedIndex = cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                            val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+
+                            val status = if (statusIndex >= 0) cursor.getInt(statusIndex) else -1
+                            val total = if (totalIndex >= 0) cursor.getLong(totalIndex) else -1L
+                            val downloaded = if (downloadedIndex >= 0) cursor.getLong(downloadedIndex) else 0L
+
                             when (status) {
-                                DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PENDING ->
-                                    updateProgressUI(downloaded, total, "Downloading…")
+                                DownloadManager.STATUS_RUNNING,
+                                DownloadManager.STATUS_PENDING -> updateProgressUI(downloaded, total, "Downloading…")
                                 DownloadManager.STATUS_SUCCESSFUL -> {
                                     updateProgressUI(total, total, "Completed")
                                     onDownloadCompleted()
+                                    return // stop posting more
                                 }
-                                DownloadManager.STATUS_FAILED ->
-                                    onDownloadFailed(cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_REASON)))
+                                DownloadManager.STATUS_FAILED -> {
+                                    val reason = if (reasonIndex >= 0) cursor.getInt(reasonIndex) else -1
+                                    onDownloadFailed(reason)
+                                    return
+                                }
                             }
                         }
                     }
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Timber.e(e, "Polling error")
+                }
                 progressHandler.postDelayed(this, 500)
             }
         }
@@ -159,12 +205,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateProgressUI(downloaded: Long, total: Long, statusText: String) {
-        runOnUiThread {
-            val percent = if (total > 0) ((downloaded * 100f) / total).toInt() else 0
-            binding.progressBar.progress = percent
-            binding.tvPercent.text = "$percent%"
-            binding.tvStatus.text = statusText
-        }
+        val percent = if (total > 0) ((downloaded * 100f) / total).toInt() else 0
+        binding.progressBar.progress = percent
+        binding.tvPercent.text = "$percent%"
+        binding.tvStatus.text = statusText
     }
 
     private fun onDownloadCompleted() {
@@ -173,20 +217,18 @@ class MainActivity : AppCompatActivity() {
             currentDownloadIndex++
             startSingleDownload(downloadUrls[currentDownloadIndex])
         } else {
-            runOnUiThread {
-                binding.tvStatus.text = "All downloads completed"
-                checkForLatestFiles()
-            }
+            binding.tvStatus.text = "All downloads completed"
+            binding.downloadStatusContainer.visibility = View.GONE
+            checkForLatestFiles()
+            Toast.makeText(this, "All files downloaded", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun onDownloadFailed(reason: Int) {
         stopProgressPolling()
-        runOnUiThread {
-            binding.tvStatus.text = "Failed on ${currentDownloadIndex + 1}/${downloadUrls.size}"
-            disablePlayButtons("DOWNLOAD FIRST")
-            Toast.makeText(this, "Download failed (reason: $reason)", Toast.LENGTH_SHORT).show()
-        }
+        binding.tvStatus.text = "Failed on ${currentDownloadIndex + 1}/${downloadUrls.size}"
+        disablePlayButtons("DOWNLOAD FIRST")
+        Toast.makeText(this, "Download failed (reason: $reason)", Toast.LENGTH_LONG).show()
     }
 
     private fun disablePlayButtons(text: String) {
@@ -196,7 +238,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnImage.text = text
     }
 
-    // Open Video / Image ( intent for Activities )
+    // Open Video / Image (intent for Activities)
     private fun openVideoFiles() {
         val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
         val videoFiles = dir.listFiles()?.filter { it.isVideo() }?.map { it.absolutePath } ?: return
@@ -223,7 +265,9 @@ class MainActivity : AppCompatActivity() {
 
     // --- Helpers ---
     private fun File.isVideo() = extension.equals("mp4", true)
-    private fun File.isImage() = extension.equals("jpg", true) || extension.equals("jpeg", true) || extension.equals("png", true)
+    private fun File.isImage() = extension.equals("jpg", true) ||
+            extension.equals("jpeg", true) || extension.equals("png", true)
+
     private fun String.getMimeType(): String = when {
         endsWith(".mp4", true) -> "video/mp4"
         endsWith(".jpg", true) || endsWith(".jpeg", true) -> "image/jpeg"
