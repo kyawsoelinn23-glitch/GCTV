@@ -15,6 +15,8 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -30,6 +32,9 @@ class MainActivity : AppCompatActivity() {
     private val progressHandler = Handler(Looper.getMainLooper())
     private var progressRunnable: Runnable? = null
     private var downloadId: Long = -1L
+
+    private val downloadedFiles = mutableListOf<File>()
+    private lateinit var spinnerAdapter: ArrayAdapter<String>
 
     private val downloadUrls = listOf(
         "https://gcmenu.com/img/Branding_old.mp4",
@@ -65,6 +70,7 @@ class MainActivity : AppCompatActivity() {
 
         ensureNotificationPermissionOn33Plus()
         initUI()
+        initSpinner()
         registerDownloadReceiver()
         checkForLatestFiles()
     }
@@ -85,6 +91,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnPlay.isFocusable = true
         binding.btnImage.isFocusable = true
         binding.btnRefresh.isFocusable = true
+        binding.spinner.isFocusable = true
+        binding.btnDelete.isFocusable = true
 
         binding.btnPlay.isEnabled = false
         binding.btnImage.isEnabled = false
@@ -94,12 +102,45 @@ class MainActivity : AppCompatActivity() {
         binding.progressBar.progress = 0
         binding.tvPercent.text = "0%"
         binding.tvStatus.text = "Idle"
+        binding.btnDelete.text = "DELETE"
 
         binding.btnDownload.setOnClickListener { startBatchDownload() }
         binding.btnPlay.setOnClickListener { openVideoFiles() }
         binding.btnImage.setOnClickListener { openImageFiles() }
-        binding.btnRefresh.setOnClickListener { checkForLatestFiles() }
+        binding.btnRefresh.setOnClickListener {
+            refreshDownloadedFiles()
+            binding.spinner.visibility = View.VISIBLE
+            Toast.makeText(this, "Downloaded files loaded", Toast.LENGTH_SHORT).show()
+        }
+        binding.btnDelete.setOnClickListener {
+            val position = binding.spinner.selectedItemPosition
+            if (position == AdapterView.INVALID_POSITION || downloadedFiles.isEmpty()) {
+                Toast.makeText(this, "No file selected", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val file = downloadedFiles[position]
+
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Confirm Delete")
+                .setMessage("Are you sure you want to delete this item?\n\n${file.name}")
+                .setCancelable(true)
+                .setPositiveButton("Delete") { dialog, _ ->
+                    if (file.exists() && file.delete()) {
+                        Toast.makeText(this, "Deleted Successfully: ${file.name}", Toast.LENGTH_SHORT).show()
+                        refreshDownloadedFiles()
+                    } else {
+                        Toast.makeText(this, "Failed to delete file", Toast.LENGTH_SHORT).show()
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Cancel") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .show()
+        }
     }
+
 
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun registerDownloadReceiver() {
@@ -114,8 +155,31 @@ class MainActivity : AppCompatActivity() {
             Timber.e(e, "registerReceiver failed")
         }
     }
+    private fun initSpinner() {
+        spinnerAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            mutableListOf()
+        )
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinner.adapter = spinnerAdapter
+    }
 
-    // Check for both video and image files
+    private fun refreshDownloadedFiles() {
+        val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
+
+        downloadedFiles.clear()
+        spinnerAdapter.clear()
+
+        dir.listFiles()?.filter { it.isFile }?.forEach {
+            downloadedFiles.add(it)
+            spinnerAdapter.add(it.name)
+        }
+
+        spinnerAdapter.notifyDataSetChanged()
+    }
+
+        // Check for both video and image files
     private fun checkForLatestFiles() {
         val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
         val files = dir.listFiles()?.filter { it.isFile } ?: emptyList()
@@ -226,6 +290,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun onDownloadFailed(reason: Int) {
         stopProgressPolling()
+        refreshDownloadedFiles()
         binding.tvStatus.text = "Failed on ${currentDownloadIndex + 1}/${downloadUrls.size}"
         disablePlayButtons("DOWNLOAD FIRST")
         Toast.makeText(this, "Download failed (reason: $reason)", Toast.LENGTH_LONG).show()
