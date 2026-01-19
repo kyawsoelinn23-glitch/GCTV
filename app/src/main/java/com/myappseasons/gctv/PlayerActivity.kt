@@ -30,15 +30,15 @@ class PlayerActivity : AppCompatActivity() {
 
         val isAndroidTV = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
-//        //resizeMode (Media3 correct way)
-//        playerView.post {
-//            playerView.setResizeMode(
-//                if (isAndroidTV)
-//                    AspectRatioFrameLayout.RESIZE_MODE_FIT
-//                else
-//                    AspectRatioFrameLayout.RESIZE_MODE_FILL
-//            )
-//        }
+        //resizeMode (Media3 correct way)
+        playerView.post {
+            playerView.setResizeMode(
+                if (isAndroidTV)
+                    AspectRatioFrameLayout.RESIZE_MODE_FIT
+                else
+                    AspectRatioFrameLayout.RESIZE_MODE_FILL
+            )
+        }
 
         val videoList = intent.getStringArrayListExtra("VIDEO_LIST")
             ?.filter { File(it).exists() }
