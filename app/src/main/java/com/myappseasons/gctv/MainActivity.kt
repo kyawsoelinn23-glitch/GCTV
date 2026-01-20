@@ -114,17 +114,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnDownload.setOnClickListener {
             if (isInternetAvailable(this)) {
                 startBatchDownload()
-            } else {
+            } else
                 Toast.makeText(this, "No Internet Connection", Toast.LENGTH_LONG).show()
-            }
         }
-        binding.btnDownload.setOnClickListener {
-            if (!isInternetAvailable(this)) {
-                Toast.makeText(this, "No Internet Connection", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-            startBatchDownload()
-        }
+        binding.btnPlay.setOnClickListener { openVideoFiles() }
         binding.btnImage.setOnClickListener { openImageFiles() }
         binding.btnRefresh.setOnClickListener {
             refreshDownloadedFiles()
@@ -352,7 +345,6 @@ class MainActivity : AppCompatActivity() {
         intent.putStringArrayListExtra("VIDEO_LIST", ArrayList(videoFiles))
         startActivity(intent)
     }
-
     private fun openImageFiles() {
         val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
         val imageFiles = dir.listFiles()?.filter { it.isImage() }?.map { it.absolutePath } ?: return
