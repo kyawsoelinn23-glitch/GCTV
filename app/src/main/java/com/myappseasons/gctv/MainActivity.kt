@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -23,7 +24,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.myappseasons.gctv.databinding.ActivityMainBinding
-import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import java.io.File
 
@@ -94,8 +94,12 @@ class MainActivity : AppCompatActivity() {
         binding.btnRefresh.isFocusable = true
         binding.spinner.isFocusable = true
         binding.btnDelete.isFocusable = true
+        binding.btnDownload.isFocusable = true
 
-        binding.btnPlay.isEnabled = false
+        binding.btnDownload.isEnabled = false
+        if (isInternetAvailable(this)) {
+            binding.btnDownload.isEnabled = true
+        }
         binding.btnImage.isEnabled = false
         binding.btnDelete.isEnabled = false
         binding.btnRefresh.isEnabled = false
@@ -107,8 +111,20 @@ class MainActivity : AppCompatActivity() {
         binding.tvStatus.text = "Idle"
         binding.btnDelete.text = "DELETE"
 
-        binding.btnDownload.setOnClickListener { startBatchDownload() }
-        binding.btnPlay.setOnClickListener { openVideoFiles() }
+        binding.btnDownload.setOnClickListener {
+            if (isInternetAvailable(this)) {
+                startBatchDownload()
+            } else {
+                Toast.makeText(this, "No Internet Connection", Toast.LENGTH_LONG).show()
+            }
+        }
+        binding.btnDownload.setOnClickListener {
+            if (!isInternetAvailable(this)) {
+                Toast.makeText(this, "No Internet Connection", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            startBatchDownload()
+        }
         binding.btnImage.setOnClickListener { openImageFiles() }
         binding.btnRefresh.setOnClickListener {
             refreshDownloadedFiles()
@@ -144,7 +160,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
     private fun registerDownloadReceiver() {
         val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
@@ -158,6 +173,26 @@ class MainActivity : AppCompatActivity() {
             Timber.e(e, "registerReceiver failed")
         }
     }
+
+    fun isInternetAvailable(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as android.net.ConnectivityManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+
+            return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        } else {
+            @Suppress("DEPRECATION")
+            val info = cm.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            return info != null && info.isConnected
+        }
+    }
+
     private fun initSpinner() {
         spinnerAdapter = ArrayAdapter(
             this,
@@ -182,7 +217,7 @@ class MainActivity : AppCompatActivity() {
         spinnerAdapter.notifyDataSetChanged()
     }
 
-        // Check for both video and image files
+    // Check for both video and image files
     private fun checkForLatestFiles() {
         val dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
         val files = dir.listFiles()?.filter { it.isFile } ?: emptyList()
@@ -345,3 +380,4 @@ class MainActivity : AppCompatActivity() {
         else -> "application/octet-stream"
     }
 }
+

@@ -66,6 +66,7 @@ dependencies {
 
     // Logging
     implementation("com.jakewharton.timber:timber:5.0.1")
+    implementation(libs.androidx.constraintlayout)
 
     // Tests
     testImplementation("junit:junit:4.13.2")

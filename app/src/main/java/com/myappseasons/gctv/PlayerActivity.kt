@@ -26,11 +26,12 @@ class PlayerActivity : AppCompatActivity() {
         setContentView(R.layout.activity_exo_player)
         hideSystemUI()
 
+
         playerView = findViewById(R.id.playerView)
 
         val isAndroidTV = packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
 
-        //resizeMode (Media3 correct way)
+        //resizeMode
         playerView.post {
             playerView.setResizeMode(
                 if (isAndroidTV)
@@ -83,4 +84,5 @@ class PlayerActivity : AppCompatActivity() {
         super.onDestroy()
         if (::player.isInitialized) player.release()
     }
+
 }
