@@ -236,7 +236,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startSingleDownload(url: String) {
-        val downloadsDir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: return
         val fileName = Uri.parse(url).lastPathSegment ?: "file_${System.currentTimeMillis()}"
         val mimeType = fileName.getMimeType()
 
